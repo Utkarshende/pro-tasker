@@ -1,9 +1,12 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const auth = require('./middleware/auth');
+const User = require('./models/User');
 const Project = require('./models/Project');
 
 const app = express();
@@ -17,24 +20,66 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ ProTasker DB Connected"))
   .catch(err => console.error("❌ Connection Error:", err));
 
-// --- ROUTES ---
+// --- AUTH ROUTES ---
 
-// 1. Test Route
-app.get('/', (req, res) => res.send("ProTasker API is Live"));
+// @route   POST /api/auth/signup
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
 
-// 2. Protected Route Example: Create a Project
-// Note: 'auth' middleware is placed before the (req, res) logic
+    // Check if user exists
+    let user = await User.findOne({ email });
+    if (user) return res.status(400).json({ msg: 'User already exists' });
+
+    user = new User({ username, email, password });
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(password, salt);
+
+    await user.save();
+
+    // Create Token
+    const payload = { id: user.id, username: user.username };
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '24h' });
+
+    res.json({ token, user: { id: user.id, username: user.username, email: user.email } });
+  } catch (err) {
+    res.status(500).send('Server error during signup');
+  }
+});
+
+// @route   POST /api/auth/login
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) return res.status(400).json({ msg: 'Invalid Credentials' });
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).json({ msg: 'Invalid Credentials' });
+
+    const payload = { id: user.id, username: user.username };
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '24h' });
+
+    res.json({ token, user: { id: user.id, username: user.username, email: user.email } });
+  } catch (err) {
+    res.status(500).send('Server error during login');
+  }
+});
+
+// --- PROJECT ROUTES (PROTECTED) ---
+
 app.post('/api/projects', auth, async (req, res) => {
   try {
     const { title, description } = req.body;
-    
     const newProject = new Project({
       title,
       description,
-      owner: req.user.id, // Comes from the 'auth' middleware
-      members: [req.user.id] // Owner is the first member
+      owner: req.user.id,
+      members: [req.user.id]
     });
-
     const project = await newProject.save();
     res.json(project);
   } catch (err) {

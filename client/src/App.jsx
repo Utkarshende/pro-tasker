@@ -1,18 +1,20 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { Layout, Plus, Folder, CheckCircle, LogOut, User } from "lucide-react";
+import { Layout, Plus, Folder, CheckCircle, LogOut, X } from "lucide-react";
 
 const API = "http://localhost:5000/api";
 
 function App() {
   const [user, setUser] = useState(JSON.parse(localStorage.getItem("user")));
   const [token, setToken] = useState(localStorage.getItem("token"));
-  const [view, setView] = useState("dashboard"); // dashboard, write, project-details
   const [projects, setProjects] = useState([]);
   const [authMode, setAuthMode] = useState("login");
   const [credentials, setCredentials] = useState({ email: "", password: "", username: "" });
+  
+  // NEW STATES FOR PROJECT CREATION
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newProject, setNewProject] = useState({ title: "", description: "" });
 
-  // Set axios defaults for all requests
   if (token) {
     axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
   }
@@ -40,7 +42,20 @@ function App() {
       setToken(res.data.token);
       setUser(res.data.user);
     } catch (err) {
-      alert("Auth Failed: " + err.response.data.msg);
+      alert("Auth Failed: " + err.response?.data?.msg);
+    }
+  };
+
+  // NEW: CREATE PROJECT FUNCTION
+  const createProject = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await axios.post(`${API}/projects`, newProject);
+      setProjects([res.data, ...projects]); // Add new project to the top of the list
+      setIsModalOpen(false); // Close modal
+      setNewProject({ title: "", description: "" }); // Reset form
+    } catch (err) {
+      alert("Error creating project");
     }
   };
 
@@ -81,7 +96,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0B0E14] text-slate-300 flex">
+    <div className="min-h-screen bg-[#0B0E14] text-slate-300 flex relative">
       {/* Sidebar */}
       <aside className="w-64 border-r border-slate-800 flex flex-col p-6 hidden md:flex">
         <div className="flex items-center gap-2 mb-10 text-white">
@@ -98,7 +113,7 @@ function App() {
         </nav>
         <div className="pt-6 border-t border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center text-[10px] font-bold uppercase">
+            <div className="w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center text-[10px] font-bold uppercase text-white">
               {user.username.charAt(0)}
             </div>
             <span className="text-xs font-bold text-white">{user.username}</span>
@@ -114,7 +129,10 @@ function App() {
             <h2 className="text-3xl font-bold text-white">Your Projects</h2>
             <p className="text-slate-500 text-sm mt-1">Manage and track your active workflows.</p>
           </div>
-          <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-all">
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+          >
             <Plus size={20} /> New Project
           </button>
         </header>
@@ -137,6 +155,44 @@ function App() {
           )}
         </div>
       </main>
+
+      {/* CREATE PROJECT MODAL */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+          <div className="w-full max-w-lg bg-[#161B22] border border-slate-800 rounded-3xl shadow-2xl p-8 animate-in fade-in zoom-in duration-200">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-white">Create New Project</h2>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-500 hover:text-white"><X size={24}/></button>
+            </div>
+            <form onSubmit={createProject} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">Project Title</label>
+                <input 
+                  required
+                  className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl outline-none focus:border-blue-500 text-white" 
+                  placeholder="e.g. Website Redesign" 
+                  value={newProject.title}
+                  onChange={e => setNewProject({...newProject, title: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">Description</label>
+                <textarea 
+                  rows="4"
+                  className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl outline-none focus:border-blue-500 text-white resize-none" 
+                  placeholder="What is this project about?" 
+                  value={newProject.description}
+                  onChange={e => setNewProject({...newProject, description: e.target.value})}
+                />
+              </div>
+              <div className="flex gap-4 pt-4">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-800 text-white p-4 rounded-xl font-bold hover:bg-slate-700 transition-all">Cancel</button>
+                <button type="submit" className="flex-1 bg-blue-600 text-white p-4 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20">Create Project</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

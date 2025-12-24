@@ -124,18 +124,15 @@ app.patch('/api/tasks/:id', auth, async (req, res) => {
   } catch (err) { res.status(500).send('Server Error'); }
 });
 
-// Delete Task
 app.delete('/api/projects/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    // 1. Delete the project
     await Project.findByIdAndDelete(id);
-    // 2. Delete all tasks associated with this project
-    await Task.deleteMany({ projectId: id });
-    
-    res.status(200).json({ message: "Project and associated tasks deleted" });
+    // This part also deletes all tasks that belonged to that project
+    await Task.deleteMany({ projectId: id }); 
+    res.status(200).json({ message: "Project deleted successfully" });
   } catch (err) {
-    res.status(500).json({ error: "Failed to delete project" });
+    res.status(500).json({ error: "Server failed to delete project" });
   }
 });
 

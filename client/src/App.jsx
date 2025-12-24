@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { 
   Layout, Plus, Folder, LogOut, X, ChevronLeft, 
-  Trash2, Search 
+  Trash2, Search, CheckCircle2 
 } from "lucide-react";
 
 // DND KIT
@@ -13,7 +13,7 @@ import {
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 
-// DYNAMIC API URL
+// --- DYNAMIC API URL ---
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 // --- 1. DRAGGABLE TASK CARD ---
@@ -84,17 +84,18 @@ function Column({ id, title, tasks, onDeleteTask, onTaskClick }) {
 
 // --- 3. MAIN APP ---
 export default function App() {
-  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem("user")));
+  // Auth State
   const [token, setToken] = useState(localStorage.getItem("token"));
+  const [isLoginView, setIsLoginView] = useState(true);
+  const [authForm, setAuthForm] = useState({ email: "", password: "", username: "" });
+
+  // App State
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [currentProject, setCurrentProject] = useState(null);
-  const [activeTask, setActiveTask] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
-
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  
   const [newProject, setNewProject] = useState({ title: "", description: "" });
   const [newTask, setNewTask] = useState({ title: "", description: "", priority: "medium" });
 
@@ -108,6 +109,27 @@ export default function App() {
 
   useEffect(() => { if (token) fetchProjects(); }, [token]);
 
+  // --- AUTH LOGIC ---
+  const handleAuth = async (e) => {
+    e.preventDefault();
+    const endpoint = isLoginView ? "/auth/login" : "/auth/register";
+    try {
+      const res = await axios.post(`${API}${endpoint}`, authForm);
+      localStorage.setItem("token", res.data.token);
+      setToken(res.data.token);
+    } catch (err) {
+      alert(err.response?.data?.message || "Authentication failed");
+    }
+  };
+
+  const logout = () => {
+    localStorage.clear();
+    setToken(null);
+    setProjects([]);
+    setCurrentProject(null);
+  };
+
+  // --- DATA LOGIC ---
   const fetchProjects = async () => {
     try {
       const res = await axios.get(`${API}/projects`, { headers: { Authorization: `Bearer ${token}` } });
@@ -133,14 +155,39 @@ export default function App() {
     } catch (err) { if (currentProject) fetchTasks(currentProject._id); }
   };
 
-  const logout = () => { localStorage.clear(); window.location.reload(); };
+  // --- VIEW: LOGIN ---
+  if (!token) {
+    return (
+      <div className="min-h-screen w-full bg-[#0B0E14] flex items-center justify-center p-6">
+        <div className="w-full max-w-md bg-[#161B22] border border-slate-800 p-8 rounded-3xl shadow-2xl">
+          <div className="flex items-center gap-2 mb-8 justify-center text-white">
+            <Layout className="text-blue-500" size={32} />
+            <span className="font-bold text-2xl tracking-tight">ProTasker</span>
+          </div>
+          <h2 className="text-white text-xl font-bold mb-6 text-center">{isLoginView ? "Welcome Back" : "Create Account"}</h2>
+          <form onSubmit={handleAuth} className="space-y-4">
+            {!isLoginView && (
+              <input className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none focus:border-blue-500" placeholder="Username" onChange={(e) => setAuthForm({...authForm, username: e.target.value})} />
+            )}
+            <input type="email" className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none focus:border-blue-500" placeholder="Email" onChange={(e) => setAuthForm({...authForm, email: e.target.value})} />
+            <input type="password" className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none focus:border-blue-500" placeholder="Password" onChange={(e) => setAuthForm({...authForm, password: e.target.value})} />
+            <button className="w-full bg-blue-600 p-4 rounded-xl font-bold text-white hover:bg-blue-700 transition-all">{isLoginView ? "Login" : "Sign Up"}</button>
+          </form>
+          <p className="text-slate-500 text-sm mt-6 text-center">
+            {isLoginView ? "Don't have an account?" : "Already have an account?"}{" "}
+            <button onClick={() => setIsLoginView(!isLoginView)} className="text-blue-500 font-bold hover:underline">{isLoginView ? "Sign Up" : "Login"}</button>
+          </p>
+        </div>
+      </div>
+    );
+  }
 
-  if (!token) return <div className="h-screen bg-[#0B0E14] flex items-center justify-center text-white font-bold">Please Login to continue.</div>;
-
+  // --- VIEW: DASHBOARD ---
   return (
-    <div className="flex h-screen w-full bg-[#0B0E14] text-slate-300 overflow-hidden">
+    <div className="flex min-h-screen w-full bg-[#0B0E14] text-slate-300 overflow-hidden">
+      
       {/* Sidebar */}
-      <aside className="w-64 border-r border-slate-800 p-6 hidden md:flex flex-col bg-[#0B0E14]">
+      <aside className="w-64 border-r border-slate-800 p-6 hidden md:flex flex-col h-screen sticky top-0 bg-[#0B0E14]">
         <div className="flex items-center gap-2 mb-10 text-white cursor-pointer" onClick={() => setCurrentProject(null)}>
           <Layout className="text-blue-500" size={24} />
           <span className="font-bold text-lg">ProTasker</span>
@@ -150,42 +197,36 @@ export default function App() {
             <Folder size={18} /> Projects
           </button>
         </nav>
-        <button onClick={logout} className="flex items-center gap-2 text-slate-500 hover:text-red-400 transition-colors text-xs font-bold uppercase mt-auto"><LogOut size={14}/> Logout</button>
+        <button onClick={logout} className="flex items-center gap-2 text-slate-500 hover:text-red-400 text-xs font-bold uppercase mt-auto"><LogOut size={14}/> Logout</button>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-full bg-[#0B0E14] overflow-y-auto">
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto h-screen flex flex-col">
         {!currentProject ? (
           <div className="p-8">
             <header className="flex justify-between items-center mb-10">
-              <h2 className="text-3xl font-bold text-white">Dashboard</h2>
-              <button onClick={() => setIsProjectModalOpen(true)} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 shadow-lg">+ New Project</button>
+              <h2 className="text-3xl font-bold text-white">Projects</h2>
+              <button onClick={() => setIsProjectModalOpen(true)} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700">+ New Project</button>
             </header>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {projects.map(p => (
-                <div key={p._id} onClick={() => { setCurrentProject(p); fetchTasks(p._id); }} className="bg-[#161B22] border border-slate-800 p-6 rounded-2xl cursor-pointer hover:border-blue-500 transition-all">
-                  <h3 className="text-white font-bold text-xl mb-2">{p.title}</h3>
-                  <p className="text-slate-500 text-sm">{p.description}</p>
+                <div key={p._id} onClick={() => { setCurrentProject(p); fetchTasks(p._id); }} className="bg-[#161B22] border border-slate-800 p-6 rounded-2xl cursor-pointer hover:border-blue-500 transition-all group">
+                  <h3 className="text-white font-bold text-xl mb-2 group-hover:text-blue-400">{p.title}</h3>
+                  <p className="text-slate-500 text-sm line-clamp-2">{p.description}</p>
                 </div>
               ))}
             </div>
           </div>
         ) : (
           <div className="flex flex-col h-full">
-            <header className="p-8 border-b border-slate-800 bg-[#161B22]/30 sticky top-0 z-10">
+            <header className="p-8 border-b border-slate-800 bg-[#161B22]/30 sticky top-0 z-10 backdrop-blur-md">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-4">
-                  <button onClick={() => setCurrentProject(null)} className="p-2 hover:bg-slate-800 rounded-lg"><ChevronLeft/></button>
+                  <button onClick={() => setCurrentProject(null)} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400"><ChevronLeft/></button>
                   <h2 className="text-2xl font-bold text-white">{currentProject.title}</h2>
                   <div className="relative ml-4">
                     <Search className="absolute left-3 top-2.5 text-slate-500" size={14} />
-                    <input 
-                      type="text" 
-                      placeholder="Search tasks..." 
-                      className="bg-[#0B0E14] border border-slate-800 rounded-lg py-2 pl-10 pr-4 text-xs text-white outline-none w-48"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
+                    <input type="text" placeholder="Search tasks..." className="bg-[#0B0E14] border border-slate-800 rounded-lg py-2 pl-10 pr-4 text-xs text-white outline-none w-48 focus:border-blue-500" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                   </div>
                 </div>
                 <button onClick={() => setIsTaskModalOpen(true)} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm">+ Add Task</button>
@@ -202,12 +243,10 @@ export default function App() {
                     tasks={filteredTasks.filter(t => t.status === status)} 
                     onDeleteTask={(id) => {
                       if(window.confirm("Delete Task?")) {
-                          axios.delete(`${API}/tasks/${id}`, { headers: { Authorization: `Bearer ${token}` } })
-                          .then(() => setTasks(prev => prev.filter(t => t._id !== id)))
-                          .catch(err => alert("Delete failed. Check console."));
+                          axios.delete(`${API}/tasks/${id}`, { headers: { Authorization: `Bearer ${token}` } }).then(() => setTasks(prev => prev.filter(t => t._id !== id)));
                       }
                     }} 
-                    onTaskClick={setActiveTask} 
+                    onTaskClick={(task) => console.log(task)} 
                   />
                 ))}
               </div>
@@ -218,9 +257,9 @@ export default function App() {
 
       {/* Task Modal */}
       {isTaskModalOpen && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-6 z-50">
-          <div className="w-full max-w-lg bg-[#161B22] border border-slate-800 rounded-3xl p-8">
-            <div className="flex justify-between mb-6"><h2 className="text-2xl font-bold text-white">New Task</h2><button onClick={() => setIsTaskModalOpen(false)}><X/></button></div>
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-6 z-50 backdrop-blur-sm">
+          <div className="w-full max-w-lg bg-[#161B22] border border-slate-800 rounded-3xl p-8 shadow-2xl">
+            <div className="flex justify-between mb-6"><h2 className="text-2xl font-bold text-white">New Task</h2><button onClick={() => setIsTaskModalOpen(false)} className="text-slate-500 hover:text-white"><X/></button></div>
             <form onSubmit={async (e) => {
                 e.preventDefault();
                 const res = await axios.post(`${API}/tasks`, { ...newTask, projectId: currentProject._id }, { headers: { Authorization: `Bearer ${token}` } });
@@ -228,8 +267,28 @@ export default function App() {
                 setIsTaskModalOpen(false);
                 setNewTask({ title: "", description: "", priority: "medium" });
             }} className="space-y-4">
-              <input required className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none" placeholder="Task Title" value={newTask.title} onChange={e => setNewTask({...newTask, title: e.target.value})} />
-              <button type="submit" className="w-full bg-blue-600 p-4 rounded-xl font-bold text-white">Add Task</button>
+              <input required className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none focus:border-blue-500" placeholder="Title" value={newTask.title} onChange={e => setNewTask({...newTask, title: e.target.value})} />
+              <textarea className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none h-24" placeholder="Description" value={newTask.description} onChange={e => setNewTask({...newTask, description: e.target.value})} />
+              <button type="submit" className="w-full bg-blue-600 p-4 rounded-xl font-bold text-white">Create Task</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Project Modal */}
+      {isProjectModalOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-6 z-50 backdrop-blur-sm">
+          <div className="w-full max-w-lg bg-[#161B22] border border-slate-800 rounded-3xl p-8 shadow-2xl">
+            <div className="flex justify-between mb-6"><h2 className="text-2xl font-bold text-white">New Project</h2><button onClick={() => setIsProjectModalOpen(false)} className="text-slate-500 hover:text-white"><X/></button></div>
+            <form onSubmit={async (e) => {
+                e.preventDefault();
+                const res = await axios.post(`${API}/projects`, newProject, { headers: { Authorization: `Bearer ${token}` } });
+                setProjects([res.data, ...projects]);
+                setIsProjectModalOpen(false);
+                setNewProject({ title: "", description: "" });
+            }} className="space-y-4">
+              <input required className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none focus:border-blue-500" placeholder="Project Name" value={newProject.title} onChange={e => setNewProject({...newProject, title: e.target.value})} />
+              <button type="submit" className="w-full bg-blue-600 p-4 rounded-xl font-bold text-white">Create Project</button>
             </form>
           </div>
         </div>

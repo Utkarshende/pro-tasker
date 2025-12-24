@@ -128,7 +128,6 @@ app.delete('/api/projects/:id', async (req, res) => {
   try {
     const { id } = req.params;
     await Project.findByIdAndDelete(id);
-    // This part also deletes all tasks that belonged to that project
     await Task.deleteMany({ projectId: id }); 
     res.status(200).json({ message: "Project deleted successfully" });
   } catch (err) {

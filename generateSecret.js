@@ -1,6 +1,5 @@
 const crypto = require('crypto');
 
-// Generates a 256-bit (32-byte) secret
 const secret = crypto.randomBytes(32).toString('hex');
 
 console.log("-------------------------------");

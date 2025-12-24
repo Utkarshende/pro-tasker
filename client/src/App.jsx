@@ -5,7 +5,6 @@ import { DndContext, PointerSensor, useSensor, useSensors, closestCorners } from
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 
-// FALLBACK: If Vercel env is missing, it uses this. Ensure /api is at the end!
 const API = import.meta.env.VITE_API_URL || "https://pro-tasker-backend-vuh1.onrender.com/api";
 
 // --- COMPONENTS ---

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { 
   Layout, Plus, Folder, LogOut, X, ChevronLeft, 
-  Trash2, Clock, CheckCircle2, AlertCircle, Settings 
+  Trash2, Clock, CheckCircle2, AlertCircle, Search 
 } from "lucide-react";
 
 // DND KIT
@@ -90,6 +90,7 @@ export default function App() {
   const [tasks, setTasks] = useState([]);
   const [currentProject, setCurrentProject] = useState(null);
   const [activeTask, setActiveTask] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Modals
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
@@ -103,11 +104,19 @@ export default function App() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
+  // PROGRESS LOGIC (Calculates based on ALL tasks in project)
   const progress = useMemo(() => {
     if (tasks.length === 0) return 0;
     const done = tasks.filter(t => t.status === 'done').length;
     return Math.round((done / tasks.length) * 100);
   }, [tasks]);
+
+  // SEARCH LOGIC (Filters tasks for the board view)
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(task => 
+      task.title.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [tasks, searchQuery]);
 
   useEffect(() => { if (token) fetchProjects(); }, [token]);
 
@@ -131,6 +140,7 @@ export default function App() {
     try {
       await axios.delete(`${API}/projects/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       setProjects(prev => prev.filter(p => p._id !== id));
+      if (currentProject?._id === id) setCurrentProject(null);
     } catch (err) { alert("Delete project failed"); }
   };
 
@@ -147,7 +157,7 @@ export default function App() {
 
   const logout = () => { localStorage.clear(); window.location.reload(); };
 
-  if (!token) return <div className="text-white p-20 text-center">Login Session Expired.</div>;
+  if (!token) return <div className="text-white p-20 text-center">Session Expired. Please Login.</div>;
 
   return (
     <div className="min-h-screen bg-[#0B0E14] text-slate-300 flex">
@@ -194,34 +204,52 @@ export default function App() {
             <header className="p-8 border-b border-slate-800 bg-[#161B22]/30 sticky top-0 z-10 backdrop-blur-md">
               <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-4">
-                  <button onClick={() => setCurrentProject(null)} className="p-2 hover:bg-slate-800 rounded-lg"><ChevronLeft/></button>
+                  <button onClick={() => setCurrentProject(null)} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400"><ChevronLeft/></button>
                   <h2 className="text-2xl font-bold text-white">{currentProject.title}</h2>
+                  
+                  {/* TASK SEARCH BAR */}
+                  <div className="relative ml-4">
+                    <Search className="absolute left-3 top-2.5 text-slate-500" size={14} />
+                    <input 
+                      type="text" 
+                      placeholder="Find a task..." 
+                      className="bg-[#0B0E14] border border-slate-800 rounded-lg py-2 pl-10 pr-4 text-xs text-white outline-none focus:border-blue-500 w-64 transition-all"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
                 </div>
                 <button onClick={() => setIsTaskModalOpen(true)} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm">+ Add Task</button>
               </div>
               <div className="max-w-md">
-                <div className="flex justify-between text-[10px] font-black uppercase tracking-widest mb-2"><span className="text-slate-500">Progress</span><span className="text-blue-400">{progress}%</span></div>
+                <div className="flex justify-between text-[10px] font-black uppercase tracking-widest mb-2"><span className="text-slate-500">Project Health</span><span className="text-blue-400">{progress}%</span></div>
                 <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                   <div className="h-full bg-blue-500 transition-all duration-700" style={{ width: `${progress}%` }} />
                 </div>
               </div>
             </header>
+
             <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
               <div className="flex-1 p-8 flex gap-6 overflow-x-auto items-start">
                 {['todo', 'in-progress', 'review', 'done'].map(status => (
-                  <Column key={status} id={status} title={status} tasks={tasks.filter(t => t.status === status)} onDeleteTask={(id) => {
+                  <Column 
+                    key={status} 
+                    id={status} 
+                    title={status} 
+                    tasks={filteredTasks.filter(t => t.status === status)} 
+                    onDeleteTask={(id) => {
                       if(window.confirm("Delete Task?")) {
                           axios.delete(`${API}/tasks/${id}`, { headers: { Authorization: `Bearer ${token}` } }).then(() => setTasks(prev => prev.filter(t => t._id !== id)));
                       }
-                  }} onTaskClick={setActiveTask} />
+                    }} 
+                    onTaskClick={setActiveTask} 
+                  />
                 ))}
               </div>
             </DndContext>
           </div>
         )}
       </main>
-
-      {/* --- MODALS --- */}
 
       {/* Profile Modal */}
       {isProfileModalOpen && (
@@ -232,7 +260,7 @@ export default function App() {
                 <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-white text-3xl font-bold mb-4">{tempUserName.charAt(0)}</div>
                 <input className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none focus:border-blue-500 text-center" value={tempUserName} onChange={(e) => setTempUserName(e.target.value)} />
             </div>
-            <button onClick={() => { const u = {...user, name: tempUserName}; localStorage.setItem("user", JSON.stringify(u)); setUser(u); setIsProfileModalOpen(false); }} className="w-full bg-blue-600 p-4 rounded-xl font-bold text-white">Save Profile</button>
+            <button onClick={() => { const u = {...user, name: tempUserName}; localStorage.setItem("user", JSON.stringify(u)); setUser(u); setIsProfileModalOpen(false); }} className="w-full bg-blue-600 p-4 rounded-xl font-bold text-white">Update Profile</button>
           </div>
         </div>
       )}
@@ -241,24 +269,21 @@ export default function App() {
       {activeTask && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-6 z-[100]">
           <div className="w-full max-w-xl bg-[#161B22] border border-slate-800 rounded-3xl p-8 shadow-2xl">
-            <div className="flex justify-between mb-6">
-                <h2 className="text-2xl font-bold text-white">{activeTask.title}</h2>
-                <button onClick={() => setActiveTask(null)}><X/></button>
-            </div>
-            <p className="bg-[#0B0E14] p-6 rounded-2xl border border-slate-800 text-slate-400 mb-6">{activeTask.description || "No details provided."}</p>
-            <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase">
-                <span>Status: <span className="text-white">{activeTask.status}</span></span>
-                <span>Priority: <span className="text-blue-400">{activeTask.priority}</span></span>
+            <div className="flex justify-between mb-6"><h2 className="text-2xl font-bold text-white">{activeTask.title}</h2><button onClick={() => setActiveTask(null)}><X/></button></div>
+            <p className="bg-[#0B0E14] p-6 rounded-2xl border border-slate-800 text-slate-400 mb-6 leading-relaxed">{activeTask.description || "No details provided."}</p>
+            <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                <span>Priority: <span className="text-blue-500">{activeTask.priority}</span></span>
+                <span>Stage: <span className="text-white">{activeTask.status}</span></span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Project Creation Modal */}
+      {/* Modals for creation (Project/Task) */}
       {isProjectModalOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-6 z-50">
           <div className="w-full max-w-lg bg-[#161B22] border border-slate-800 rounded-3xl p-8">
-            <h2 className="text-2xl font-bold text-white mb-6">New Project</h2>
+            <h2 className="text-2xl font-bold text-white mb-6">New Workspace</h2>
             <form onSubmit={async (e) => {
                 e.preventDefault();
                 const res = await axios.post(`${API}/projects`, newProject, { headers: { Authorization: `Bearer ${token}` } });
@@ -266,19 +291,18 @@ export default function App() {
                 setIsProjectModalOpen(false);
                 setNewProject({ title: "", description: "" });
             }} className="space-y-4">
-              <input required className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none" placeholder="Project Title" value={newProject.title} onChange={e => setNewProject({...newProject, title: e.target.value})} />
-              <textarea className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none h-32" placeholder="Description" value={newProject.description} onChange={e => setNewProject({...newProject, description: e.target.value})} />
-              <button type="submit" className="w-full bg-blue-600 p-4 rounded-xl font-bold text-white">Create Workspace</button>
+              <input required className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none focus:border-blue-500" placeholder="Project Name" value={newProject.title} onChange={e => setNewProject({...newProject, title: e.target.value})} />
+              <textarea className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none h-32" placeholder="Project Description" value={newProject.description} onChange={e => setNewProject({...newProject, description: e.target.value})} />
+              <button type="submit" className="w-full bg-blue-600 p-4 rounded-xl font-bold text-white">Create</button>
             </form>
           </div>
         </div>
       )}
-      
-      {/* Task Creation Modal */}
+
       {isTaskModalOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-6 z-50">
           <div className="w-full max-w-lg bg-[#161B22] border border-slate-800 rounded-3xl p-8">
-            <h2 className="text-2xl font-bold text-white mb-6">Add Task</h2>
+            <h2 className="text-2xl font-bold text-white mb-6">Add New Task</h2>
             <form onSubmit={async (e) => {
                 e.preventDefault();
                 const res = await axios.post(`${API}/tasks`, { ...newTask, projectId: currentProject._id }, { headers: { Authorization: `Bearer ${token}` } });
@@ -286,14 +310,14 @@ export default function App() {
                 setIsTaskModalOpen(false);
                 setNewTask({ title: "", description: "", priority: "medium" });
             }} className="space-y-4">
-              <input required className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none" placeholder="Task Title" value={newTask.title} onChange={e => setNewTask({...newTask, title: e.target.value})} />
+              <input required className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none focus:border-blue-500" placeholder="What needs to be done?" value={newTask.title} onChange={e => setNewTask({...newTask, title: e.target.value})} />
               <select className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white" value={newTask.priority} onChange={e => setNewTask({...newTask, priority: e.target.value})}>
                 <option value="low">Low Priority</option>
                 <option value="medium">Medium Priority</option>
                 <option value="high">High Priority</option>
               </select>
-              <textarea className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none h-24" placeholder="Description" value={newTask.description} onChange={e => setNewTask({...newTask, description: e.target.value})} />
-              <button type="submit" className="w-full bg-blue-600 p-4 rounded-xl font-bold text-white">Add to Board</button>
+              <textarea className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none h-24" placeholder="Task description..." value={newTask.description} onChange={e => setNewTask({...newTask, description: e.target.value})} />
+              <button type="submit" className="w-full bg-blue-600 p-4 rounded-xl font-bold text-white">Add Task</button>
             </form>
           </div>
         </div>

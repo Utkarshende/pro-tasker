@@ -26,6 +26,10 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ ProTasker DB Connected"))
   .catch(err => console.error("❌ Connection Error:", err));
 
+  app.get('/', (req, res) => {
+  res.send('Backend is running successfully!');
+});
+
 // --- AUTH ROUTES ---
 
 app.post('/api/auth/signup', async (req, res) => {

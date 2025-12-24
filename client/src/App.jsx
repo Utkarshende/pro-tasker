@@ -13,7 +13,7 @@ import {
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 
-const API = "http://localhost:5000/api";
+const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 // --- 1. DRAGGABLE TASK CARD ---
 function TaskCard({ task, onDelete, onClick }) {

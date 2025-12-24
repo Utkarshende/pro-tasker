@@ -131,5 +131,6 @@ app.delete('/api/tasks/:id', auth, async (req, res) => {
   } catch (err) { res.status(500).send('Server Error'); }
 });
 
+// Start Server//
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 ProTasker Server on Port ${PORT}`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

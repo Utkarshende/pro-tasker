@@ -21,24 +21,31 @@ function TaskCard({ task, onDelete, onClick }) {
     id: task._id,
   });
 
+  // This style is what physically moves the card on the screen
   const style = {
     transform: CSS.Translate.toString(transform),
-    opacity: isDragging ? 0.3 : 1,
-    zIndex: isDragging ? 100 : 1,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 999 : 1,
+    transition: isDragging ? 'none' : 'transform 200ms ease',
   };
 
   return (
     <div 
       ref={setNodeRef} 
       style={style}
-      className="relative group mb-3"
+      // Combine listeners and attributes on the main container
+      {...listeners} 
+      {...attributes}
+      className="relative group mb-3 outline-none"
     >
       <div 
-        onClick={() => onClick(task)}
-        className={`bg-[#1C2128] border ${isDragging ? 'border-blue-500 shadow-xl' : 'border-slate-800'} p-4 rounded-xl hover:border-slate-600 transition-all cursor-pointer`}
+        onClick={(e) => {
+          // Important: Only trigger click if we aren't dragging
+          if (!isDragging) onClick(task);
+        }}
+        className={`bg-[#1C2128] border ${isDragging ? 'border-blue-500 shadow-2xl' : 'border-slate-800'} p-4 rounded-xl hover:border-slate-600 transition-colors cursor-grab active:cursor-grabbing`}
       >
-        {/* DRAG HANDLE (Applied only to this top bar) */}
-        <div {...listeners} {...attributes} className="flex items-center justify-between mb-3 cursor-grab active:cursor-grabbing">
+        <div className="flex items-center justify-between mb-3">
           <div className={`w-10 h-1 rounded-full ${
             task.priority === 'high' ? 'bg-red-500' : 
             task.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
@@ -51,10 +58,11 @@ function TaskCard({ task, onDelete, onClick }) {
         </p>
       </div>
 
-      {/* Delete Button (Hidden until hover) */}
+      {/* Delete Button - stopPropagation is vital here */}
       <button 
+        onPointerDown={(e) => e.stopPropagation()} 
         onClick={(e) => { e.stopPropagation(); onDelete(task._id); }}
-        className="absolute top-3 right-3 p-1.5 bg-red-500/10 text-red-500 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-white"
+        className="absolute top-3 right-3 p-1.5 bg-red-500/10 text-red-500 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-white z-20"
       >
         <Trash2 size={12}/>
       </button>
@@ -70,10 +78,10 @@ function Column({ id, title, tasks, onDeleteTask, onTaskClick }) {
     <div 
       ref={setNodeRef} 
       className={`flex flex-col p-4 rounded-2xl border transition-all min-w-[280px] min-h-[600px] ${
-        isOver ? 'bg-blue-600/5 border-blue-500/50 ring-2 ring-blue-500/20' : 'bg-[#161B22]/50 border-slate-800'
+        isOver ? 'bg-blue-600/10 border-blue-500/50 scale-[1.01]' : 'bg-[#161B22]/50 border-slate-800'
       }`}
     >
-      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-5 px-2 flex justify-between items-center">
+      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-5 px-2 flex justify-between items-center">
         {title.replace('-', ' ')}
         <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded text-[10px]">
           {tasks.length}
@@ -100,20 +108,21 @@ export default function App() {
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [currentProject, setCurrentProject] = useState(null);
-  const [activeTask, setActiveTask] = useState(null); // For Details Modal
+  const [activeTask, setActiveTask] = useState(null);
 
-  // Modals
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   
-  // Forms
   const [newProject, setNewProject] = useState({ title: "", description: "" });
   const [newTask, setNewTask] = useState({ title: "", description: "", priority: "medium" });
 
-  // DND Sensors
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  // Use a smaller distance for more responsive dragging
+  const sensors = useSensors(
+    useSensor(PointerSensor, { 
+      activationConstraint: { distance: 3 } 
+    })
+  );
 
-  // Progress Logic
   const progress = useMemo(() => {
     if (tasks.length === 0) return 0;
     const done = tasks.filter(t => t.status === 'done').length;
@@ -145,16 +154,20 @@ export default function App() {
     if (!over || active.id === over.id) return;
 
     const taskId = active.id;
-    const newStatus = over.id; // Corrected: Column ID
+    const newStatus = over.id;
 
-    // Optimistic Update
+    // 1. Optimistic local update (instantly moves the card)
     setTasks(prev => prev.map(t => t._id === taskId ? { ...t, status: newStatus } : t));
 
+    // 2. Sync with database
     try {
       await axios.patch(`${API}/tasks/${taskId}`, { status: newStatus }, { 
         headers: { Authorization: `Bearer ${token}` } 
       });
-    } catch (err) { fetchTasks(currentProject._id); }
+    } catch (err) {
+      // Revert if API fails
+      if (currentProject) fetchTasks(currentProject._id);
+    }
   };
 
   const deleteTask = async (id) => {
@@ -198,7 +211,7 @@ export default function App() {
     window.location.reload();
   };
 
-  if (!token) return <div className="p-20 text-white text-center">Please refer to previous Auth UI code to login.</div>;
+  if (!token) return <div className="p-20 text-white text-center">Authentication Required</div>;
 
   return (
     <div className="min-h-screen bg-[#0B0E14] text-slate-300 flex">
@@ -209,11 +222,11 @@ export default function App() {
           <span className="font-bold text-lg">ProTasker</span>
         </div>
         <nav className="flex-1">
-          <button onClick={() => setCurrentProject(null)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm ${!currentProject ? 'bg-blue-600/10 text-blue-400' : 'hover:bg-slate-800'}`}>
+          <button onClick={() => setCurrentProject(null)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm ${!currentProject ? 'bg-blue-600/10 text-blue-400' : 'hover:bg-slate-800 transition-colors'}`}>
             <Folder size={18} /> Projects
           </button>
         </nav>
-        <button onClick={logout} className="flex items-center gap-2 text-slate-500 hover:text-white mt-auto transition-colors">
+        <button onClick={logout} className="flex items-center gap-2 text-slate-500 hover:text-white mt-auto transition-colors p-2 rounded-lg">
           <LogOut size={18}/> Logout
         </button>
       </aside>
@@ -259,8 +272,11 @@ export default function App() {
               </div>
             </header>
             
-            {/* KANBAN BOARD */}
-            <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+            <DndContext 
+              sensors={sensors} 
+              collisionDetection={closestCorners} 
+              onDragEnd={handleDragEnd}
+            >
               <div className="flex-1 p-8 flex gap-6 overflow-x-auto items-start">
                 {['todo', 'in-progress', 'review', 'done'].map(status => (
                   <Column 
@@ -278,12 +294,10 @@ export default function App() {
         )}
       </main>
 
-      {/* --- MODALS --- */}
-
-      {/* Task Details Modal */}
+      {/* Details Modal */}
       {activeTask && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 z-[100]">
-          <div className="w-full max-w-xl bg-[#161B22] border border-slate-800 rounded-3xl p-8 shadow-2xl animate-in zoom-in duration-200">
+          <div className="w-full max-w-xl bg-[#161B22] border border-slate-800 rounded-3xl p-8 shadow-2xl">
             <div className="flex justify-between items-start mb-6">
               <div>
                 <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 bg-blue-500/10 px-2 py-1 rounded">
@@ -294,53 +308,53 @@ export default function App() {
               <button onClick={() => setActiveTask(null)} className="p-2 hover:bg-slate-800 rounded-full text-slate-500"><X/></button>
             </div>
             <p className="text-slate-400 leading-relaxed mb-8 bg-[#0B0E14] p-5 rounded-2xl border border-slate-800">
-              {activeTask.description || "No details provided for this task."}
+              {activeTask.description || "No details provided."}
             </p>
             <div className="flex justify-between items-center pt-6 border-t border-slate-800">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-                <Clock size={14}/> Status: <span className="text-white capitalize">{activeTask.status}</span>
+              <div className="text-xs font-bold text-slate-500">
+                Status: <span className="text-white capitalize">{activeTask.status}</span>
               </div>
               <button onClick={() => deleteTask(activeTask._id)} className="flex items-center gap-2 text-xs font-bold text-red-500 hover:bg-red-500/10 px-4 py-2 rounded-lg transition-colors">
-                <Trash2 size={14}/> Delete Task
+                <Trash2 size={14}/> Delete
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Create Project Modal */}
+      {/* Project Modal */}
       {isProjectModalOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-6 z-50 backdrop-blur-sm">
-          <div className="w-full max-w-lg bg-[#161B22] border border-slate-800 rounded-3xl p-8 shadow-2xl">
+          <div className="w-full max-w-lg bg-[#161B22] border border-slate-800 rounded-3xl p-8">
             <h2 className="text-2xl font-bold text-white mb-6">New Workspace</h2>
             <form onSubmit={createProject} className="space-y-4">
               <input required className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none focus:border-blue-500" placeholder="Project Name" value={newProject.title} onChange={e => setNewProject({...newProject, title: e.target.value})} />
               <textarea className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none h-32" placeholder="Description..." value={newProject.description} onChange={e => setNewProject({...newProject, description: e.target.value})} />
-              <div className="flex gap-4 pt-2">
+              <div className="flex gap-4">
                 <button type="button" onClick={() => setIsProjectModalOpen(false)} className="flex-1 bg-slate-800 p-4 rounded-xl font-bold">Cancel</button>
-                <button type="submit" className="flex-1 bg-blue-600 p-4 rounded-xl font-bold">Create</button>
+                <button type="submit" className="flex-1 bg-blue-600 p-4 rounded-xl font-bold text-white">Create</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Create Task Modal */}
+      {/* Task Modal */}
       {isTaskModalOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-6 z-50 backdrop-blur-sm">
-          <div className="w-full max-w-lg bg-[#161B22] border border-slate-800 rounded-3xl p-8 shadow-2xl">
+          <div className="w-full max-w-lg bg-[#161B22] border border-slate-800 rounded-3xl p-8">
             <h2 className="text-2xl font-bold text-white mb-6">Add New Task</h2>
             <form onSubmit={createTask} className="space-y-4">
-              <input required className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none focus:border-blue-500" placeholder="What needs to be done?" value={newTask.title} onChange={e => setNewTask({...newTask, title: e.target.value})} />
-              <select className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none" value={newTask.priority} onChange={e => setNewTask({...newTask, priority: e.target.value})}>
-                <option value="low">Low Priority</option>
-                <option value="medium">Medium Priority</option>
-                <option value="high">High Priority</option>
+              <input required className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none focus:border-blue-500" placeholder="Title" value={newTask.title} onChange={e => setNewTask({...newTask, title: e.target.value})} />
+              <select className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white" value={newTask.priority} onChange={e => setNewTask({...newTask, priority: e.target.value})}>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
               </select>
-              <textarea className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none h-24" placeholder="Task details..." value={newTask.description} onChange={e => setNewTask({...newTask, description: e.target.value})} />
-              <div className="flex gap-4 pt-2">
-                <button type="button" onClick={() => setIsTaskModalOpen(false)} className="flex-1 bg-slate-800 p-4 rounded-xl font-bold text-white">Cancel</button>
-                <button type="submit" className="flex-1 bg-blue-600 p-4 rounded-xl font-bold text-white">Add Task</button>
+              <textarea className="w-full bg-[#0B0E14] border border-slate-800 p-4 rounded-xl text-white outline-none h-24" placeholder="Description..." value={newTask.description} onChange={e => setNewTask({...newTask, description: e.target.value})} />
+              <div className="flex gap-4">
+                <button type="button" onClick={() => setIsTaskModalOpen(false)} className="flex-1 bg-slate-800 p-4 rounded-xl font-bold">Cancel</button>
+                <button type="submit" className="flex-1 bg-blue-600 p-4 rounded-xl font-bold text-white">Add</button>
               </div>
             </form>
           </div>

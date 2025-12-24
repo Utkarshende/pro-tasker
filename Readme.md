@@ -6,7 +6,11 @@ ProTasker is a minimalist, high-performance **Full-Stack Kanban Management Tool*
 
 ## 📸 Screenshots
 
+### Login Page
+![Login Screen](./client/public/screenshots/login.png)
 
+### Dashboard
+![Dashboard Screen](./client/public/screenshots/dashboard.png)
 
 ## ✨ Features
 
